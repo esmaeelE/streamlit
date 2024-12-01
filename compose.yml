@@ -1,0 +1,35 @@
+version: '3.4'                                                                                                                                                                                
+services:
+  chatbot_front:
+    # image: chatbot:0.1
+    build:
+      context: .
+      dockerfile: Dockerfile
+      tags:
+        - "chatbot:0.11"
+
+    container_name: chatbot_front
+    restart: always
+    ports:
+      - "127.0.0.1:8080:80"
+    networks:
+      - backend
+
+  expose:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: unless-stopped
+    ports:
+      # These ports are in format <host-port>:<container-port>
+      - '80:80' # Public HTTP Port
+      - '443:443' # Public HTTPS Port
+      - '81:81' # Admin Web Port
+      # Add any other Stream port you want to expose
+      # - '21:21' # FTP
+    network_mode: "host"        
+  
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+          
+networks:
+  backend:
