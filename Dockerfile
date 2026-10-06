@@ -1,17 +1,33 @@
-# This sets up the container with Python 3.10 installed.
-FROM python:3.10-slim
+# This sets up the container with Python 3.12 installed.
+FROM python:3.12-slim
 
-# This copies everything in your current directory to the /app directory in the container.
-COPY . /app
+# Install uv (fast Python package manager)
+COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
 
 # This sets the /app directory as the working directory for any RUN, CMD, ENTRYPOINT, or COPY instructions that follow.
 WORKDIR /app
 
-# This runs pip install for all the packages listed in your requirements.txt file.
-RUN pip install -r requirements.txt
+# Copy dependency files first for better layer caching.
+COPY pyproject.toml uv.lock ./
 
-# This tells Docker to listen on port 80 at runtime. Port 80 is the standard port for HTTP.
-EXPOSE 80
+# Install dependencies from the uv lockfile (without the project itself, for layer caching).
+RUN uv sync --frozen --no-dev --no-install-project
+
+# This copies everything in your current directory to the /app directory in the container.
+COPY . /app
+
+# Install the project package itself.
+RUN uv sync --frozen --no-dev
+
+# This tells Docker to listen on port 8501 at runtime (non-privileged).
+EXPOSE 8501
+
+# Add the uv virtualenv bin to PATH so the streamlit entrypoint resolves.
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Create non-root user and switch to it.
+RUN useradd --create-home --shell /bin/bash appuser && chown -R appuser:appuser /app
+USER appuser
 
 # This command creates a .streamlit directory in the home directory of the container.
 RUN mkdir ~/.streamlit
@@ -23,4 +39,4 @@ RUN cp config.toml ~/.streamlit/config.toml
 ENTRYPOINT ["streamlit", "run"]
 
 # This command tells Streamlit to run your app.py script when the container starts.
-CMD ["app.py"]
+CMD ["src/streamlit_app/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
